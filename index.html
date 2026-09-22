@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>個人被動收入預估月曆 - Bin Financial</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    /* 配息組別 Excel 擬真色彩標籤 */
+    .cycle-monthly { background-color: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); } /* 綠色: 月配 */
+    .cycle-q1 { background-color: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }       /* 黃色: 1,4,7,10 */
+    .cycle-q2 { background-color: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }      /* 藍色: 2,5,8,11 */
+    .cycle-q3 { background-color: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3); }      /* 粉色: 3,6,9,12 */
+    
+    /* 金額顯示高亮與隱藏 0 值 */
+    .has-value { font-weight: 600; color: #f8fafc; }
+    .no-value { color: #334155; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8 font-sans">
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- 頂部標題與總計卡片 -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-sky-400 flex items-center gap-2">
+          📅 個人被動收入預估月曆
+        </h1>
+        <p class="text-slate-400 text-sm mt-1">依據近四季累計配息 (dividend_4q ÷ 4) 平滑預估每月現金流</p>
+      </div>
+      <div class="bg-slate-800 px-6 py-3 rounded-lg border border-slate-700 text-right w-full md:w-auto">
+        <span class="text-xs text-slate-400 block uppercase">預估全年總被動收入</span>
+        <span id="grandTotalText" class="text-2xl font-extrabold text-emerald-400">$0</span>
+        <span class="text-xs text-slate-400 block mt-0.5" id="avgMonthlyText">平均每月: $0</span>
+      </div>
+    </div>
+
+    <!-- 持股管理輸入區 (含 AutoComplete 選單) -->
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-4">
+      <h2 class="text-base font-semibold text-slate-200 flex items-center gap-2">
+        ➕ 管理個人持股 (資料僅存在本機)
+      </h2>
+      <div class="flex flex-wrap gap-3 items-center">
+        <!-- 輸入框綁定 datalist -->
+        <input 
+          type="text" 
+          id="inputSymbol" 
+          list="stockOptions" 
+          placeholder="搜尋代碼或名稱 (例: 00878)" 
+          autocomplete="off"
+          class="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-sky-500 uppercase w-60"
+        >
+        <!-- 下拉式自動對比選單 -->
+        <datalist id="stockOptions"></datalist>
+
+        <input 
+          type="number" 
+          id="inputShares" 
+          placeholder="持有股數 (例: 10000)" 
+          class="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-sky-500 w-44"
+        >
+        
+        <button onclick="addOrUpdateStock()" class="bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium px-5 py-2 rounded-lg transition shadow-md">
+          新增 / 更新
+        </button>
+        <button onclick="clearAllPortfolio()" class="bg-rose-950/50 hover:bg-rose-900/80 text-rose-300 border border-rose-800/50 text-sm font-medium px-4 py-2 rounded-lg transition ml-auto">
+          清空持股
+        </button>
+      </div>
+    </div>
+
+    <!-- 1~12 月配息統計大矩陣表格 -->
+    <div class="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-xl">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-950 text-slate-400 border-b border-slate-800 text-center">
+              <th class="py-3 px-3 min-w-[120px] text-left">代碼 / 名稱</th>
+              <th class="py-3 px-2 min-w-[90px]">入帳週期</th>
+              <th class="py-3 px-3 min-w-[100px] text-right">持有股數</th>
+              <th class="py-3 px-2 min-w-[70px]">1月</th>
+              <th class="py-3 px-2 min-w-[70px]">2月</th>
+              <th class="py-3 px-2 min-w-[70px]">3月</th>
+              <th class="py-3 px-2 min-w-[70px]">4月</th>
+              <th class="py-3 px-2 min-w-[70px]">5月</th>
+              <th class="py-3 px-2 min-w-[70px]">6月</th>
+              <th class="py-3 px-2 min-w-[70px]">7月</th>
+              <th class="py-3 px-2 min-w-[70px]">8月</th>
+              <th class="py-3 px-2 min-w-[70px]">9月</th>
+              <th class="py-3 px-2 min-w-[70px]">10月</th>
+              <th class="py-3 px-2 min-w-[70px]">11月</th>
+              <th class="py-3 px-2 min-w-[70px]">12月</th>
+              <th class="py-3 px-3 min-w-[90px] text-right text-emerald-400 font-bold">合計</th>
+              <th class="py-3 px-2 w-[50px]">操作</th>
+            </tr>
+          </thead>
+          <tbody id="matrixTableBody" class="divide-y divide-slate-800/60 font-mono">
+            <!-- 動態渲染表格內容 -->
+          </tbody>
+          <tfoot class="bg-slate-950 font-bold border-t-2 border-slate-700">
+            <tr id="matrixTableFoot" class="text-right">
+              <td colspan="3" class="py-3 px-4 text-center text-slate-300 font-sans">全月度加總</td>
+              <!-- 1~12 月與合計會由 JS 自動計算寫入 -->
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ==========================================
+    // 1. Supabase 連線設定 (請填入你的 URL 與 Key)
+    // ==========================================
+    const SUPABASE_URL = 'https://sktrmemtvarutrbcpwij.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_iPdnGKeCEfPuH2xZBYK4Sg_G8ivGx1p';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ==========================================
+    // 2. 全域狀態變數
+    // ==========================================
+    let globalDbData = []; // 存放從 Supabase 讀取出來的完整股票與 ETF 資料
+    
+    // 使用者持股：優先從瀏覽器 LocalStorage 讀取，預設提供基本範例
+    let userPortfolio = JSON.parse(localStorage.getItem("user_portfolio")) || [
+      { symbol: "00937B", shares: 385000 },
+      { symbol: "00751B", shares: 15000 },
+      { symbol: "00919",  shares: 18000 },
+      { symbol: "00878",  shares: 96000 }
+    ];
+
+    // 工具函式：數字轉千分位
+    const fmt = num => num > 0 ? num.toLocaleString() : '0';
+
+    // 工具函式：解析 payout_cycle 字串轉成 1~12 月數字陣列
+    // 2. 解析月份 (若個股未設定 payout_cycle，預設帶入 8 月配息)
+    function parsePayoutMonths(cycle) {
+      if (!cycle || cycle === "未知" || cycle === "查無數據") return [8]; // 預設台股常規 8 月入帳
+      if (cycle.includes('月配')) return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      return cycle.split(',').map(m => parseInt(m.trim(), 10)).filter(m => !isNaN(m) && m >= 1 && m <= 12);
+    }
+
+    // 工具函式：取得週期標籤的 CSS Class
+    // 1. 精準判定標籤顏色 (針對 1,4,7,10 / 2,5,8,11 / 3,6,9,12)
+    function getCycleBadgeClass(cycle) {
+      if (!cycle || cycle === "查無數據" || cycle === "未知") return "bg-rose-950/60 text-rose-300 border border-rose-800/60";
+      if (cycle.includes('月配')) return 'cycle-monthly';
+      if (cycle.includes('3') || cycle.includes('6') || cycle.includes('9') || cycle.includes('12')) return 'cycle-q3'; // 粉色
+      if (cycle.includes('2') || cycle.includes('5') || cycle.includes('8') || cycle.includes('11')) return 'cycle-q2'; // 藍色
+      if (cycle.includes('1') || cycle.includes('4') || cycle.includes('7') || cycle.includes('10')) return 'cycle-q1'; // 黃色
+      return 'bg-slate-800 text-slate-300 border border-slate-700';
+    }
+
+    // ==========================================
+    // 3. Supabase 資料讀取與 AutoComplete
+    // ==========================================
+    async function fetchSupabaseData() {
+      try {
+        document.getElementById("matrixTableBody").innerHTML = `
+          <tr>
+            <td colspan="17" class="py-8 text-center text-slate-400">
+              ⏳ 正在從 Supabase 載入最新 ETF 與股票數據...
+            </td>
+          </tr>`;
+
+        // 1. 抓取 ETF 資料 (請確認 etf_data 表有這 4 個欄位)
+        const etfRes = await supabaseClient.from('etf_data').select('symbol, name, payout_cycle, dividend_4q');
+        if (etfRes.error) {
+          console.error("❌ etf_data 讀取失敗詳情：", etfRes.error);
+          throw etfRes.error;
+        }
+
+        // 2. 抓取個股資料 (只抓取絕大多數個股表都有的欄位)
+        const stockRes = await supabaseClient.from('stock_data').select('*'); // 直接用 * 撈取全欄位更安全
+        if (stockRes.error) {
+          console.error("❌ stock_data 讀取失敗詳情：", stockRes.error);
+          throw stockRes.error;
+        }
+
+        // 格式化個股資料：優先用 dividend_4q，若無則拿 cash_div，再無則帶 0
+        const formattedStocks = (stockRes.data || []).map(s => ({
+          ...s,
+          dividend_4q: s.dividend_4q ?? s.cash_div ?? 0
+        }));
+
+        globalDbData = [...(etfRes.data || []), ...formattedStocks];
+
+        updateDatalistOptions();
+        renderMatrix();
+
+      } catch (error) {
+        console.error("Supabase 最終捕捉到的錯誤資訊:", error);
+        document.getElementById("matrixTableBody").innerHTML = `
+          <tr>
+            <td colspan="17" class="py-8 text-center text-rose-400">
+              ❌ 資料載入失敗！<br>
+              <span class="text-xs text-rose-300/80 mt-1 block">錯誤訊息：${error.message || JSON.stringify(error)}</span>
+            </td>
+          </tr>`;
+      }
+    }
+
+    // 填充 AutoComplete 下拉選單
+    function updateDatalistOptions() {
+      const datalist = document.getElementById("stockOptions");
+      if (!datalist) return;
+      
+      datalist.innerHTML = "";
+      globalDbData.forEach(item => {
+        const option = document.createElement("option");
+        option.value = item.symbol;
+        option.textContent = `${item.symbol} - ${item.name || ''}`;
+        datalist.appendChild(option);
+      });
+    }
+
+    // ==========================================
+    // 4. 表格與數據計算 Engine
+    // ==========================================
+    // 主渲染 Engine (修正浮點數轉型與金額分配)
+    function renderMatrix() {
+      const tbody = document.getElementById("matrixTableBody");
+      tbody.innerHTML = "";
+
+      const monthlyTotals = new Array(12).fill(0);
+      let grandTotal = 0;
+
+      userPortfolio.forEach((item, index) => {
+        const dbItem = globalDbData.find(d => d.symbol.toUpperCase() === item.symbol.toUpperCase());
+
+        // 強制轉為 Number，避免字串或 null 導致計算變成 0
+        const rawDiv = dbItem ? (dbItem.dividend_4q ?? dbItem.cash_div ?? 0) : 0;
+        const annualDividend = parseFloat(rawDiv) || 0;
+        
+        const payoutCycle = dbItem ? (dbItem.payout_cycle || "8") : "查無數據";
+        const months = parsePayoutMonths(payoutCycle);
+        const frequency = months.length;
+
+        const monthlyIncome = new Array(12).fill(0);
+
+        if (frequency > 0 && annualDividend > 0 && item.shares > 0) {
+          // 每期每股配息 = 近四季總股息 ÷ 配息次數
+          const perPayoutPerShare = annualDividend / frequency;
+          // 當期總入帳金額 = 每期每股配息 × 持有股數
+          const payoutAmount = Math.round(perPayoutPerShare * item.shares);
+
+          months.forEach(m => {
+            monthlyIncome[m - 1] = payoutAmount;
+            monthlyTotals[m - 1] += payoutAmount;
+          });
+        }
+
+        const rowTotal = monthlyIncome.reduce((a, b) => a + b, 0);
+        grandTotal += rowTotal;
+
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-slate-800/40 transition text-center";
+
+        let monthsHtml = "";
+        monthlyIncome.forEach(val => {
+          const valClass = val > 0 ? "has-value" : "no-value";
+          monthsHtml += `<td class="py-2.5 px-2 text-right ${valClass}">${val > 0 ? fmt(val) : '0'}</td>`;
+        });
+
+        const displayCycle = dbItem ? (dbItem.payout_cycle || "年配(8月)") : "查無數據";
+
+        tr.innerHTML = `
+          <td class="py-2.5 px-3 text-left font-bold text-slate-200">
+            ${item.symbol}
+            ${dbItem && dbItem.name ? `<span class="text-xs text-slate-400 block font-normal">${dbItem.name}</span>` : ''}
+          </td>
+          <td class="py-2.5 px-2">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold ${getCycleBadgeClass(displayCycle)}">
+              ${displayCycle}
+            </span>
+          </td>
+          <td class="py-2.5 px-3 text-right text-slate-300">${fmt(item.shares)}</td>
+          ${monthsHtml}
+          <td class="py-2.5 px-3 text-right text-emerald-400 font-bold">${fmt(rowTotal)}</td>
+          <td class="py-2.5 px-2">
+            <button onclick="removeStock(${index})" class="text-slate-500 hover:text-rose-400 text-xs px-1">✕</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // 頁尾加總
+      const tfootRow = document.getElementById("matrixTableFoot");
+      let footMonthsHtml = "";
+      monthlyTotals.forEach(mTotal => {
+        footMonthsHtml += `<td class="py-3 px-2 text-right text-amber-300 font-mono">${fmt(mTotal)}</td>`;
+      });
+
+      tfootRow.innerHTML = `
+        <td colspan="3" class="py-3 px-4 text-center text-slate-300 font-sans">全月度總計</td>
+        ${footMonthsHtml}
+        <td class="py-3 px-3 text-right text-emerald-400 font-mono font-extrabold">${fmt(grandTotal)}</td>
+        <td></td>
+      `;
+
+      document.getElementById("grandTotalText").innerText = `$${fmt(grandTotal)}`;
+      document.getElementById("avgMonthlyText").innerText = `平均每月: $${fmt(Math.round(grandTotal / 12))}`;
+
+      localStorage.setItem("user_portfolio", JSON.stringify(userPortfolio));
+    }
+
+    // ==========================================
+    // 5. 持股互動操作邏輯
+    // ==========================================
+    function addOrUpdateStock() {
+      const symbolInput = document.getElementById("inputSymbol");
+      const sharesInput = document.getElementById("inputShares");
+      
+      let rawSymbol = symbolInput.value.trim().toUpperCase();
+      const symbol = rawSymbol.split(' ')[0]; // 擷取第一個空白前的代碼
+      const shares = parseInt(sharesInput.value, 10);
+
+      if (!symbol || isNaN(shares) || shares < 0) {
+        alert("請輸入正確的股票代碼與持有股數！");
+        return;
+      }
+
+      // 檢查代碼是否存在於資料庫中
+      const existsInDb = globalDbData.some(d => d.symbol.toUpperCase() === symbol);
+      if (!existsInDb && globalDbData.length > 0) {
+        const confirmAdd = confirm(`⚠️ 警告：資料庫中查無代碼 [ ${symbol} ] 的配息數據。\n\n目前無法計算其配息金額，是否仍要加入清單？`);
+        if (!confirmAdd) return;
+      }
+
+      const existingIndex = userPortfolio.findIndex(p => p.symbol === symbol);
+      if (existingIndex >= 0) {
+        userPortfolio[existingIndex].shares = shares;
+      } else {
+        userPortfolio.push({ symbol, shares });
+      }
+
+      symbolInput.value = "";
+      sharesInput.value = "";
+      renderMatrix();
+    }
+
+    function removeStock(index) {
+      userPortfolio.splice(index, 1);
+      renderMatrix();
+    }
+
+    function clearAllPortfolio() {
+      if (confirm("確定要清空所有持股紀錄嗎？")) {
+        userPortfolio = [];
+        renderMatrix();
+      }
+    }
+
+    // 頁面初次載入
+    window.addEventListener("DOMContentLoaded", () => {
+      // 確定 supabase 物件載入完成後才執行
+      if (typeof supabase !== 'undefined') {
+        fetchSupabaseData();
+      } else {
+        console.error("Supabase SDK 載入失敗，請檢查 head 中的 script 標籤");
+      }
+    });
+  </script>
+</body>
+</html>
