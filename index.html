@@ -115,7 +115,7 @@
 
   <script>
     // ==========================================
-    // 1. Supabase 連線設定 (請填入你的 URL 與 Key)
+    // 1. Supabase 連線設定
     // ==========================================
     const SUPABASE_URL = 'https://sktrmemtvarutrbcpwij.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_iPdnGKeCEfPuH2xZBYK4Sg_G8ivGx1p';
@@ -124,9 +124,8 @@
     // ==========================================
     // 2. 全域狀態變數
     // ==========================================
-    let globalDbData = []; // 存放從 Supabase 讀取出來的完整股票與 ETF 資料
+    let globalDbData = []; 
     
-    // 使用者持股：優先從瀏覽器 LocalStorage 讀取，預設提供基本範例
     let userPortfolio = JSON.parse(localStorage.getItem("user_portfolio")) || [
       { symbol: "00937B", shares: 385000 },
       { symbol: "00751B", shares: 15000 },
@@ -134,25 +133,38 @@
       { symbol: "00878",  shares: 96000 }
     ];
 
-    // 工具函式：數字轉千分位
     const fmt = num => num > 0 ? num.toLocaleString() : '0';
 
-    // 工具函式：解析 payout_cycle 字串轉成 1~12 月數字陣列
-    // 2. 解析月份 (若個股未設定 payout_cycle，預設帶入 8 月配息)
+    // 解析入帳月份陣列
     function parsePayoutMonths(cycle) {
-      if (!cycle || cycle === "未知" || cycle === "查無數據") return [8]; // 預設台股常規 8 月入帳
-      if (cycle.includes('月配')) return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-      return cycle.split(',').map(m => parseInt(m.trim(), 10)).filter(m => !isNaN(m) && m >= 1 && m <= 12);
+      if (!cycle || cycle === "未知" || cycle === "查無數據") return [8]; // 預設 8 月入帳
+      if (typeof cycle === 'string' && cycle.includes('月配')) {
+        return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      }
+
+      const str = String(cycle);
+      const months = str.split(',')
+        .map(m => parseInt(m.trim(), 10))
+        .filter(m => !isNaN(m) && m >= 1 && m <= 12);
+
+      return months.length > 0 ? months : [8];
     }
 
-    // 工具函式：取得週期標籤的 CSS Class
-    // 1. 精準判定標籤顏色 (針對 1,4,7,10 / 2,5,8,11 / 3,6,9,12)
+    // 精準判定標籤顏色 (依據解析後的月份或明確的組別)
     function getCycleBadgeClass(cycle) {
-      if (!cycle || cycle === "查無數據" || cycle === "未知") return "bg-rose-950/60 text-rose-300 border border-rose-800/60";
-      if (cycle.includes('月配')) return 'cycle-monthly';
-      if (cycle.includes('3') || cycle.includes('6') || cycle.includes('9') || cycle.includes('12')) return 'cycle-q3'; // 粉色
-      if (cycle.includes('2') || cycle.includes('5') || cycle.includes('8') || cycle.includes('11')) return 'cycle-q2'; // 藍色
-      if (cycle.includes('1') || cycle.includes('4') || cycle.includes('7') || cycle.includes('10')) return 'cycle-q1'; // 黃色
+      if (!cycle || cycle === "查無數據" || cycle === "未知") {
+        return "bg-rose-950/60 text-rose-300 border border-rose-800/60";
+      }
+      const str = String(cycle);
+      if (str.includes('月配')) return 'cycle-monthly';
+
+      const months = parsePayoutMonths(str);
+      
+      // 根據包含的代表月份決定組別顏色
+      if (months.includes(3) || months.includes(6) || months.includes(9) || months.includes(12)) return 'cycle-q3'; // 粉色
+      if (months.includes(2) || months.includes(5) || months.includes(8) || months.includes(11)) return 'cycle-q2'; // 藍色
+      if (months.includes(1) || months.includes(4) || months.includes(7) || months.includes(10)) return 'cycle-q1'; // 黃色
+
       return 'bg-slate-800 text-slate-300 border border-slate-700';
     }
 
@@ -168,21 +180,12 @@
             </td>
           </tr>`;
 
-        // 1. 抓取 ETF 資料 (請確認 etf_data 表有這 4 個欄位)
         const etfRes = await supabaseClient.from('etf_data').select('symbol, name, payout_cycle, dividend_4q');
-        if (etfRes.error) {
-          console.error("❌ etf_data 讀取失敗詳情：", etfRes.error);
-          throw etfRes.error;
-        }
+        if (etfRes.error) throw etfRes.error;
 
-        // 2. 抓取個股資料 (只抓取絕大多數個股表都有的欄位)
-        const stockRes = await supabaseClient.from('stock_data').select('*'); // 直接用 * 撈取全欄位更安全
-        if (stockRes.error) {
-          console.error("❌ stock_data 讀取失敗詳情：", stockRes.error);
-          throw stockRes.error;
-        }
+        const stockRes = await supabaseClient.from('stock_data').select('*');
+        if (stockRes.error) throw stockRes.error;
 
-        // 格式化個股資料：優先用 dividend_4q，若無則拿 cash_div，再無則帶 0
         const formattedStocks = (stockRes.data || []).map(s => ({
           ...s,
           dividend_4q: s.dividend_4q ?? s.cash_div ?? 0
@@ -194,7 +197,7 @@
         renderMatrix();
 
       } catch (error) {
-        console.error("Supabase 最終捕捉到的錯誤資訊:", error);
+        console.error("Supabase 載入錯誤:", error);
         document.getElementById("matrixTableBody").innerHTML = `
           <tr>
             <td colspan="17" class="py-8 text-center text-rose-400">
@@ -205,7 +208,6 @@
       }
     }
 
-    // 填充 AutoComplete 下拉選單
     function updateDatalistOptions() {
       const datalist = document.getElementById("stockOptions");
       if (!datalist) return;
@@ -222,7 +224,6 @@
     // ==========================================
     // 4. 表格與數據計算 Engine
     // ==========================================
-    // 主渲染 Engine (修正浮點數轉型與金額分配)
     function renderMatrix() {
       const tbody = document.getElementById("matrixTableBody");
       tbody.innerHTML = "";
@@ -233,7 +234,6 @@
       userPortfolio.forEach((item, index) => {
         const dbItem = globalDbData.find(d => d.symbol.toUpperCase() === item.symbol.toUpperCase());
 
-        // 強制轉為 Number，避免字串或 null 導致計算變成 0
         const rawDiv = dbItem ? (dbItem.dividend_4q ?? dbItem.cash_div ?? 0) : 0;
         const annualDividend = parseFloat(rawDiv) || 0;
         
@@ -244,9 +244,7 @@
         const monthlyIncome = new Array(12).fill(0);
 
         if (frequency > 0 && annualDividend > 0 && item.shares > 0) {
-          // 每期每股配息 = 近四季總股息 ÷ 配息次數
           const perPayoutPerShare = annualDividend / frequency;
-          // 當期總入帳金額 = 每期每股配息 × 持有股數
           const payoutAmount = Math.round(perPayoutPerShare * item.shares);
 
           months.forEach(m => {
@@ -289,7 +287,6 @@
         tbody.appendChild(tr);
       });
 
-      // 頁尾加總
       const tfootRow = document.getElementById("matrixTableFoot");
       let footMonthsHtml = "";
       monthlyTotals.forEach(mTotal => {
@@ -317,7 +314,7 @@
       const sharesInput = document.getElementById("inputShares");
       
       let rawSymbol = symbolInput.value.trim().toUpperCase();
-      const symbol = rawSymbol.split(' ')[0]; // 擷取第一個空白前的代碼
+      const symbol = rawSymbol.split(' ')[0];
       const shares = parseInt(sharesInput.value, 10);
 
       if (!symbol || isNaN(shares) || shares < 0) {
@@ -325,7 +322,6 @@
         return;
       }
 
-      // 檢查代碼是否存在於資料庫中
       const existsInDb = globalDbData.some(d => d.symbol.toUpperCase() === symbol);
       if (!existsInDb && globalDbData.length > 0) {
         const confirmAdd = confirm(`⚠️ 警告：資料庫中查無代碼 [ ${symbol} ] 的配息數據。\n\n目前無法計算其配息金額，是否仍要加入清單？`);
@@ -356,13 +352,11 @@
       }
     }
 
-    // 頁面初次載入
     window.addEventListener("DOMContentLoaded", () => {
-      // 確定 supabase 物件載入完成後才執行
       if (typeof supabase !== 'undefined') {
         fetchSupabaseData();
       } else {
-        console.error("Supabase SDK 載入失敗，請檢查 head 中的 script 標籤");
+        console.error("Supabase SDK 載入失敗");
       }
     });
   </script>
