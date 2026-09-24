@@ -18,6 +18,7 @@
     .has-value { font-weight: 600; color: #f8fafc; }
     .no-value { color: #334155; }
 
+    /* Sticky 第一欄鎖定 */
     .sticky-col {
       position: sticky;
       left: 0;
@@ -30,7 +31,7 @@
   <div class="max-w-7xl mx-auto space-y-6">
     
     <!-- 頂部標題與總計卡片區 -->
-    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg gap-4">
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg gap-5">
       <div>
         <h1 class="text-2xl font-bold text-sky-400 flex items-center gap-2">
           📅 個人被動收入預估月曆
@@ -38,25 +39,25 @@
         <p class="text-slate-400 text-sm mt-1">依據近四季累計配息 (dividend_4q ÷ 4) 平滑預估每月現金流</p>
       </div>
 
-      <!-- 右側三卡片區 (新增：本月真實配息入帳金額 + 市值 + 預估總被動收入) -->
+      <!-- 右側三卡片區 -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full lg:w-auto">
         
-        <!-- ✨【新增卡片】本月真實配息入帳金額 -->
-        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-center shadow-inner flex flex-col justify-center min-w-[190px]">
+        <!-- 本月真實配息入帳金額 -->
+        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-center shadow-inner flex flex-col justify-center min-w-[200px]">
           <span class="text-xs text-rose-300 font-medium tracking-wide uppercase">本月配息入帳金額</span>
           <span id="actualCurrentMonthText" class="text-2xl font-black text-rose-400 my-0.5">$0</span>
           <span class="text-[10px] text-slate-400">依據投信已公布之數據計算</span>
         </div>
 
-        <!-- 股票市值與殖利率卡片 -->
-        <div class="bg-slate-800/80 px-5 py-3 rounded-xl border border-slate-700 text-right min-w-[190px]">
+        <!-- 股票總市值與殖利率 -->
+        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-right shadow-inner flex flex-col justify-center min-w-[200px]">
           <span class="text-xs text-slate-400 block uppercase">股票總市值</span>
           <span id="totalMarketValueText" class="text-2xl font-extrabold text-slate-100">$0</span>
           <span class="text-xs text-emerald-400 font-medium block mt-0.5" id="totalYieldText">股息殖利率 0.00%</span>
         </div>
 
-        <!-- 預估全年總被動收入卡片 -->
-        <div class="bg-slate-800/80 px-5 py-3 rounded-xl border border-slate-700 text-right min-w-[190px]">
+        <!-- 預估全年總被動收入 -->
+        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-right shadow-inner flex flex-col justify-center min-w-[200px]">
           <span class="text-xs text-slate-400 block uppercase">預估全年總被動收入</span>
           <span id="grandTotalText" class="text-2xl font-extrabold text-emerald-400">$0</span>
           <span class="text-xs text-slate-400 block mt-0.5" id="avgMonthlyText">平均每月: $0</span>
@@ -187,7 +188,7 @@
     }
 
     // ==========================================
-    // 3. Supabase 資料讀取 (修正 stock_data 欄位名稱)
+    // 3. Supabase 資料讀取 (針對欄位防錯隔離)
     // ==========================================
     async function fetchSupabaseData() {
       try {
@@ -198,17 +199,16 @@
             </td>
           </tr>`;
 
-        // ETF：讀取 dividend_4q、dividend_latest 與 pay_date
+        // 1. ETF
         const etfRes = await supabaseClient.from('etf_data')
           .select('symbol, name, payout_cycle, dividend_4q, price, dividend_latest, pay_date');
         if (etfRes.error) throw etfRes.error;
 
-        // 個股：讀取 cash_div 與 pay_date (不要選取不存在的 dividend_4q)
+        // 2. 個股 (正確排斥 dividend_4q，使用 cash_div)
         const stockRes = await supabaseClient.from('stock_data')
           .select('symbol, name, payout_cycle, price, cash_div, pay_date');
         if (stockRes.error) throw stockRes.error;
 
-        // 統一資料結構格式
         const formattedEtfs = (etfRes.data || []).map(item => ({
           ...item,
           dividend_4q: parseFloat(item.dividend_4q || 0),
@@ -218,8 +218,8 @@
 
         const formattedStocks = (stockRes.data || []).map(item => ({
           ...item,
-          dividend_4q: parseFloat(item.cash_div || 0), // 個股以 cash_div 當作近四季/年度總股息
-          price: item.price ?? 0,
+          dividend_4q: parseFloat(item.cash_div || 0),
+          price: parseFloat(item.price || 0),
           latest_payout: parseFloat(item.cash_div || 0),
           pay_date: item.pay_date || null
         }));
@@ -265,20 +265,19 @@
       let grandTotal = 0;
       let totalMarketValue = 0;
       
-      // 取得當前月份 (1 ~ 12)
-      const currentMonth = new Date().getMonth() + 1; 
-      let actualCurrentMonthTotal = 0; // ✨ 本月真實入帳總和
+      const currentMonth = new Date().getMonth() + 1; // 取得當月 (1~12)
+      let actualCurrentMonthTotal = 0;
 
       userPortfolio.forEach((item, index) => {
         const dbItem = globalDbData.find(d => d.symbol.toUpperCase() === item.symbol.toUpperCase());
 
-        // 計算市值
+        // 股票市值計算
         const currentPrice = parseFloat(dbItem?.price ?? 0) || 0;
         const itemMarketValue = item.shares * currentPrice;
         totalMarketValue += itemMarketValue;
 
-        // 計算預估月曆金額 (4q 平滑)
-        const rawDiv = dbItem ? (dbItem.dividend_4q ?? dbItem.cash_div ?? 0) : 0;
+        // 近四季配息預估
+        const rawDiv = dbItem ? (dbItem.dividend_4q ?? 0) : 0;
         const annualDividend = parseFloat(rawDiv) || 0;
         
         const payoutCycle = dbItem ? (dbItem.payout_cycle || "8") : "查無數據";
@@ -297,10 +296,10 @@
           });
         }
 
-        // ✨【計算真實當月配息】檢查 pay_date 是否落於當月
+        // 計算真實當月配息入帳金額
         if (dbItem && dbItem.pay_date && item.shares > 0) {
           const payDateObj = new Date(dbItem.pay_date);
-          const payMonth = payDateObj.getMonth() + 1; // 1~12
+          const payMonth = payDateObj.getMonth() + 1;
 
           if (payMonth === currentMonth) {
             const actualPayout = Math.round(item.shares * dbItem.latest_payout);
@@ -358,7 +357,7 @@
       // 殖利率計算
       const totalYield = totalMarketValue > 0 ? ((grandTotal / totalMarketValue) * 100).toFixed(2) : "0.00";
 
-      // ✨ 更新所有頂部卡片顯示
+      // 更新卡片數據
       document.getElementById("actualCurrentMonthText").innerText = `$${fmt(actualCurrentMonthTotal)}`;
       document.getElementById("totalMarketValueText").innerText = `$${fmt(Math.round(totalMarketValue))}`;
       document.getElementById("totalYieldText").innerText = `股息殖利率 ${totalYield}%`;
