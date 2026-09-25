@@ -158,14 +158,22 @@
     ];
 
     const fmt = num => num > 0 ? num.toLocaleString() : '0';
-    // ✅ 升級版：自動去空白、轉大寫，並自動補足台股代碼前導零 (如 878 -> 00878, 406A -> 00406A)
+    // ✅ 智慧型代碼清洗工具 (完美區分 ETF 與 一般個股/金融股)
     const cleanSymbol = sym => {
       let str = String(sym || '').trim().toUpperCase();
       if (!str) return '';
-      // 若長度小於 5 且開頭是數字，補零至 5 碼（兼顧 00878 與 00406A 等格式）
-      if (str.length < 5 && /^\d/.test(str)) {
-        str = str.padStart(5, '0');
+
+      // 1. 如果長度為 3 碼且開頭是數字（例: "878" -> "00878", "940" -> "00940"） -> 自動補齊 5 碼
+      if (str.length === 3 && /^\d/.test(str)) {
+        return str.padStart(5, '0');
       }
+
+      // 2. 如果長度為 4 碼且帶有英文字母（例: "953B" -> "00953B", "406A" -> "00406A"） -> 自動補齊 5 碼
+      if (str.length === 4 && /[A-Z]$/.test(str)) {
+        return str.padStart(5, '0');
+      }
+
+      // 3. 一般 4 碼純數字個股/金融股（例: "2812", "2330", "2892"） -> 保持 4 碼，絕不加前導零！
       return str;
     };
 
@@ -282,8 +290,9 @@
       });
     }
 
+
     // ==========================================
-    // 4. 表格與數據計算 Engine
+    // 4. 表格與數據計算 Engine (雙軌：歷史表優先 + 主表備援)
     // ==========================================
     function renderMatrix() {
       const tbody = document.getElementById("matrixTableBody");
@@ -309,7 +318,7 @@
         const itemMarketValue = item.shares * currentPrice;
         totalMarketValue += itemMarketValue;
 
-        // 2. 近四季平滑預估計算
+        // 2. 近四季/年度平滑預估計算 (1~12月矩陣)
         const rawDiv = dbItem ? (dbItem.dividend_4q ?? 0) : 0;
         const annualDividend = parseFloat(rawDiv) || 0;
         
@@ -329,22 +338,31 @@
           });
         }
 
-        // 3. ✨【精準本月實際配息對接 (依據 pay_date)】
+        // 3. ✨【本月配息金額對接：歷史流水表優先 + 主表 pay_date 備援】
         let itemCurrentPayout = 0;
-        
-        // 嚴格比對 dividend_history 發放日 (pay_date) 是否落在當月 (YYYY-MM)
+        let matchedInHistory = false;
+
+        // 優先 1：比對 dividend_history 發放日 (pay_date) 是否落在當月 (YYYY-MM)
         if (globalDividendHistory.length > 0 && item.shares > 0) {
           const payDateRecords = globalDividendHistory.filter(h => {
             if (!h.pay_date || cleanSymbol(h.symbol) !== itemSymbol) return false;
             return String(h.pay_date).startsWith(targetYearMonth);
           });
 
-          // 若有符合當月發放日的紀錄，加總分配金額 (若金額尚未公佈 null/0 則加 0)
           if (payDateRecords.length > 0) {
             payDateRecords.forEach(rec => {
               const divAmount = parseFloat(rec.dividend) || 0;
               itemCurrentPayout += Math.round(item.shares * divAmount);
             });
+            matchedInHistory = true;
+          }
+        }
+
+        // 備援 2 (針對金融股與個股)：若歷史流水表無紀錄，回退檢查 stock_data / etf_data 主表的 pay_date
+        if (!matchedInHistory && dbItem && dbItem.pay_date && item.shares > 0) {
+          if (String(dbItem.pay_date).startsWith(targetYearMonth)) {
+            const singleDiv = dbItem.latest_payout > 0 ? dbItem.latest_payout : annualDividend;
+            itemCurrentPayout = Math.round(item.shares * singleDiv);
           }
         }
 
