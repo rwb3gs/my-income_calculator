@@ -18,7 +18,7 @@
     .has-value { font-weight: 600; color: #f8fafc; }
     .no-value { color: #334155; }
 
-    /* Sticky 第一欄鎖定 */
+    /* Sticky 第一欄鎖定 (精準限寬防止爆版) */
     .sticky-col {
       position: sticky;
       left: 0;
@@ -42,7 +42,7 @@
       <!-- 右側三卡片區 (全卡片靠右對齊) -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full lg:w-auto">
         
-        <!-- 卡片 1：本月真實配息入帳金額 (對齊右側 text-right) -->
+        <!-- 卡片 1：本月真實配息入帳金額 -->
         <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-right shadow-inner flex flex-col justify-center min-w-[200px]">
           <span class="text-xs text-rose-300 font-medium tracking-wide uppercase block">本月配息入帳金額</span>
           <span id="actualCurrentMonthText" class="text-2xl font-black text-rose-400 my-0.5 block">$0</span>
@@ -104,7 +104,7 @@
         <table class="w-full text-sm text-left border-collapse">
           <thead>
             <tr class="bg-slate-950 text-slate-400 border-b border-slate-800 text-center">
-              <th class="py-3 px-3 min-w-[140px] text-left sticky-col bg-slate-950 shadow-[2px_0_5px_rgba(0,0,0,0.5)]">代碼 / 名稱</th>
+              <th class="py-3 px-3 text-left sticky-col bg-slate-950 shadow-[2px_0_5px_rgba(0,0,0,0.5)] w-[110px] min-w-[110px] max-w-[110px]">代碼 / 名稱</th>
               <th class="py-3 px-2 min-w-[90px]">入帳週期</th>
               <th class="py-3 px-3 min-w-[100px] text-right">持有股數</th>
               <th class="py-3 px-2 min-w-[70px]">1月</th>
@@ -128,7 +128,7 @@
           </tbody>
           <tfoot class="bg-slate-950 font-bold border-t-2 border-slate-700">
             <tr id="matrixTableFoot" class="text-right">
-              <td colspan="3" class="py-3 px-4 text-center text-slate-300 font-sans sticky-col bg-slate-950 shadow-[2px_0_5px_rgba(0,0,0,0.5)]">全月度總計</td>
+              <!-- JS 動態寫入 -->
             </tr>
           </tfoot>
         </table>
@@ -199,12 +199,10 @@
             </td>
           </tr>`;
 
-        // 1. ETF
         const etfRes = await supabaseClient.from('etf_data')
           .select('symbol, name, payout_cycle, dividend_4q, price, dividend_latest, pay_date');
         if (etfRes.error) throw etfRes.error;
 
-        // 2. 個股
         const stockRes = await supabaseClient.from('stock_data')
           .select('symbol, name, payout_cycle, price, cash_div, pay_date');
         if (stockRes.error) throw stockRes.error;
@@ -265,18 +263,16 @@
       let grandTotal = 0;
       let totalMarketValue = 0;
       
-      const currentMonth = new Date().getMonth() + 1; // 1~12 月
+      const currentMonth = new Date().getMonth() + 1;
       let actualCurrentMonthTotal = 0;
 
       userPortfolio.forEach((item, index) => {
         const dbItem = globalDbData.find(d => d.symbol.toUpperCase() === item.symbol.toUpperCase());
 
-        // 市值計算
         const currentPrice = parseFloat(dbItem?.price ?? 0) || 0;
         const itemMarketValue = item.shares * currentPrice;
         totalMarketValue += itemMarketValue;
 
-        // 平滑預估計算
         const rawDiv = dbItem ? (dbItem.dividend_4q ?? 0) : 0;
         const annualDividend = parseFloat(rawDiv) || 0;
         
@@ -296,7 +292,6 @@
           });
         }
 
-        // 當月真實配息入帳金額計算
         if (dbItem && dbItem.pay_date && item.shares > 0) {
           const payDateObj = new Date(dbItem.pay_date);
           const payMonth = payDateObj.getMonth() + 1;
@@ -321,10 +316,11 @@
 
         const displayCycle = dbItem ? (dbItem.payout_cycle || "8") : "查無數據";
 
+        // 💡 第一欄寬度固定為 w-[110px]，避免過寬
         tr.innerHTML = `
-          <td class="py-2.5 px-3 text-left font-bold text-slate-200 sticky-col bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.5)]">
+          <td class="py-2.5 px-3 text-left font-bold text-slate-200 sticky-col bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.5)] w-[110px] min-w-[110px] max-w-[110px] truncate">
             ${item.symbol}
-            ${dbItem && dbItem.name ? `<span class="text-xs text-slate-400 block font-normal">${dbItem.name}</span>` : ''}
+            ${dbItem && dbItem.name ? `<span class="text-xs text-slate-400 block font-normal truncate">${dbItem.name}</span>` : ''}
           </td>
           <td class="py-2.5 px-2">
             <span class="px-2 py-0.5 rounded text-xs font-semibold ${getCycleBadgeClass(displayCycle)}">
@@ -341,6 +337,7 @@
         tbody.appendChild(tr);
       });
 
+      // 💡 頁尾加總欄位，對齊 110px 鎖定寬度
       const tfootRow = document.getElementById("matrixTableFoot");
       let footMonthsHtml = "";
       monthlyTotals.forEach(mTotal => {
@@ -348,16 +345,18 @@
       });
 
       tfootRow.innerHTML = `
-        <td colspan="3" class="py-3 px-4 text-center text-slate-300 font-sans sticky-col bg-slate-950 shadow-[2px_0_5px_rgba(0,0,0,0.5)]">全月度總計</td>
+        <td class="py-3 px-3 text-left text-slate-200 font-sans font-bold sticky-col bg-slate-950 shadow-[2px_0_5px_rgba(0,0,0,0.5)] w-[110px] min-w-[110px] max-w-[110px]">
+          全月度總計
+        </td>
+        <td class="py-3 px-2 bg-slate-950"></td>
+        <td class="py-3 px-3 bg-slate-950"></td>
         ${footMonthsHtml}
         <td class="py-3 px-3 text-right text-emerald-400 font-mono font-extrabold">${fmt(grandTotal)}</td>
-        <td></td>
+        <td class="bg-slate-950"></td>
       `;
 
-      // 殖利率計算
       const totalYield = totalMarketValue > 0 ? ((grandTotal / totalMarketValue) * 100).toFixed(2) : "0.00";
 
-      // 更新卡片數據
       document.getElementById("actualCurrentMonthText").innerText = `$${fmt(actualCurrentMonthTotal)}`;
       document.getElementById("totalMarketValueText").innerText = `$${fmt(Math.round(totalMarketValue))}`;
       document.getElementById("totalYieldText").innerText = `股息殖利率 ${totalYield}%`;
