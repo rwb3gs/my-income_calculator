@@ -31,7 +31,7 @@
   <div class="max-w-7xl mx-auto space-y-6">
     
     <!-- 頂部標題與總計卡片區 -->
-    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg gap-5">
+    <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg gap-5">
       <div>
         <h1 class="text-2xl font-bold text-sky-400 flex items-center gap-2">
           📅 個人被動收入預估月曆
@@ -39,25 +39,32 @@
         <p class="text-slate-400 text-sm mt-1">依據近四季累計配息 (dividend_4q ÷ 4) 平滑預估每月現金流</p>
       </div>
 
-      <!-- 右側三卡片區 (全卡片靠右對齊) -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full lg:w-auto">
+      <!-- 右側四卡片區 (全卡片靠右對齊) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full xl:w-auto">
         
-        <!-- 卡片 1：本月配息實際入帳金額 -->
-        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-right shadow-inner flex flex-col justify-center min-w-[200px]">
-          <span class="text-xs text-rose-300 font-medium tracking-wide uppercase block">本月配息實際入帳金額</span>
-          <span id="actualCurrentMonthText" class="text-2xl font-black text-rose-400 my-0.5 block">$0</span>
-          <span class="text-[10px] text-slate-400 block">嚴格依據當月發放日 (pay_date) 統計</span>
+        <!-- 新增卡片 1：資產總值與帳戶投資餘額 -->
+        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-right shadow-inner flex flex-col justify-center min-w-[180px]">
+          <span class="text-sm text-slate-400 block uppercase font-medium">資產總值</span>
+          <span id="totalAssetsText" class="text-2xl font-extrabold text-sky-300 my-0.5 block">$0</span>
+          <span class="text-sm text-slate-400 block" id="cashBalanceSubText">帳戶投資餘額: $0</span>
         </div>
 
-        <!-- 卡片 2：股票總市值與殖利率 -->
-        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-right shadow-inner flex flex-col justify-center min-w-[200px]">
+        <!-- 卡片 2：本月配息實際入帳金額 -->
+        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-right shadow-inner flex flex-col justify-center min-w-[180px]">
+          <span class="text-xs text-rose-300 font-medium tracking-wide uppercase block">本月配息實際入帳金額</span>
+          <span id="actualCurrentMonthText" class="text-2xl font-black text-rose-400 my-0.5 block">$0</span>
+          <span class="text-[10px] text-slate-400 block">依據投信已公布之數據統計</span>
+        </div>
+
+        <!-- 卡片 3：股票總市值與殖利率 -->
+        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-right shadow-inner flex flex-col justify-center min-w-[180px]">
           <span class="text-xs text-slate-400 block uppercase">股票總市值</span>
           <span id="totalMarketValueText" class="text-2xl font-extrabold text-slate-100">$0</span>
           <span class="text-xs text-emerald-400 font-medium block mt-0.5" id="totalYieldText">股息殖利率 0.00%</span>
         </div>
 
-        <!-- 卡片 3：預估全年總被動收入 -->
-        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-right shadow-inner flex flex-col justify-center min-w-[200px]">
+        <!-- 卡片 4：預估全年總被動收入 -->
+        <div class="bg-slate-800/90 border border-slate-700 px-5 py-3 rounded-xl text-right shadow-inner flex flex-col justify-center min-w-[180px]">
           <span class="text-xs text-slate-400 block uppercase">預估全年總被動收入</span>
           <span id="grandTotalText" class="text-2xl font-extrabold text-emerald-400">$0</span>
           <span class="text-xs text-slate-400 block mt-0.5" id="avgMonthlyText">平均每月: $0</span>
@@ -66,36 +73,59 @@
       </div>
     </div>
 
-    <!-- 持股管理輸入區 -->
+    <!-- 持股與資產管理輸入區 -->
     <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-4">
-      <h2 class="text-base font-semibold text-slate-200 flex items-center gap-2">
-        ➕ 管理個人持股 (資料僅存在本機)
-      </h2>
-      <div class="flex flex-wrap gap-3 items-center">
-        <input 
-          type="text" 
-          id="inputSymbol" 
-          list="stockOptions" 
-          placeholder="搜尋代碼或名稱 (例: 00878)" 
-          autocomplete="off"
-          class="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-sky-500 uppercase w-60"
-        >
-        <datalist id="stockOptions"></datalist>
+      
+      <!-- 第一列：新增/更新持股 -->
+      <div>
+        <h2 class="text-base font-semibold text-slate-200 flex items-center gap-2 mb-3">
+          ➕ 管理個人持股 (資料僅存在本機)
+        </h2>
+        <div class="flex flex-wrap gap-3 items-center">
+          <input 
+            type="text" 
+            id="inputSymbol" 
+            list="stockOptions" 
+            placeholder="搜尋代碼或名稱 (例: 00878)" 
+            autocomplete="off"
+            class="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-sky-500 uppercase w-60"
+          >
+          <datalist id="stockOptions"></datalist>
 
+          <input 
+            type="number" 
+            id="inputShares" 
+            placeholder="持有股數 (例: 10000)" 
+            class="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-sky-500 w-44"
+          >
+          
+          <button onclick="addOrUpdateStock()" class="bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium px-5 py-2 rounded-lg transition shadow-md">
+            新增 / 更新持股
+          </button>
+          <button onclick="clearAllPortfolio()" class="bg-rose-950/50 hover:bg-rose-900/80 text-rose-300 border border-rose-800/50 text-sm font-medium px-4 py-2 rounded-lg transition ml-auto">
+            清空持股
+          </button>
+        </div>
+      </div>
+
+      <hr class="border-slate-800 my-2">
+
+      <!-- 第二列：新增「帳戶投資餘額」手動設定區 -->
+      <div class="flex flex-wrap gap-3 items-center">
+        <span class="text-sm font-medium text-slate-300 flex items-center gap-1.5">
+          💰 帳戶投資餘額設定：
+        </span>
         <input 
           type="number" 
-          id="inputShares" 
-          placeholder="持有股數 (例: 10000)" 
-          class="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-sky-500 w-44"
+          id="inputCashBalance" 
+          placeholder="輸入帳戶現金餘額 (例: 90000)" 
+          class="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-sky-500 w-60"
         >
-        
-        <button onclick="addOrUpdateStock()" class="bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium px-5 py-2 rounded-lg transition shadow-md">
-          新增 / 更新
-        </button>
-        <button onclick="clearAllPortfolio()" class="bg-rose-950/50 hover:bg-rose-900/80 text-rose-300 border border-rose-800/50 text-sm font-medium px-4 py-2 rounded-lg transition ml-auto">
-          清空持股
+        <button onclick="updateCashBalance()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-5 py-2 rounded-lg transition shadow-md">
+          更新餘額
         </button>
       </div>
+
     </div>
 
     <!-- 1~12 月配息統計大矩陣表格 -->
@@ -146,11 +176,14 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // ==========================================
-    // 2. 全域狀態變數
+    // 2. 全域狀態變數 (含投資餘額 LocalStorage 存取)
     // ==========================================
     let globalDbData = []; 
     let globalDividendHistory = []; 
     
+    // 讀取帳戶投資現金餘額 (預設 90,000)
+    let userCashBalance = parseFloat(localStorage.getItem("user_cash_balance")) || 90000;
+
     let userPortfolio = JSON.parse(localStorage.getItem("user_portfolio")) || [
       { symbol: "00878", shares: 95000 },
       { symbol: "2892",  shares: 20000 },
@@ -158,22 +191,23 @@
     ];
 
     const fmt = num => num > 0 ? num.toLocaleString() : '0';
-    // ✅ 智慧型代碼清洗工具 (完美區分 ETF 與 一般個股/金融股)
+
+    // 智慧型代碼清洗工具 (完美區分 ETF 與 一般個股/金融股)
     const cleanSymbol = sym => {
       let str = String(sym || '').trim().toUpperCase();
       if (!str) return '';
 
-      // 1. 如果長度為 3 碼且開頭是數字（例: "878" -> "00878", "940" -> "00940"） -> 自動補齊 5 碼
+      // 1. 3 位數 ETF (例: "878" -> "00878")
       if (str.length === 3 && /^\d/.test(str)) {
         return str.padStart(5, '0');
       }
 
-      // 2. 如果長度為 4 碼且帶有英文字母（例: "953B" -> "00953B", "406A" -> "00406A"） -> 自動補齊 5 碼
+      // 2. 4 位數帶字母 ETF (例: "953B" -> "00953B", "406A" -> "00406A")
       if (str.length === 4 && /[A-Z]$/.test(str)) {
         return str.padStart(5, '0');
       }
 
-      // 3. 一般 4 碼純數字個股/金融股（例: "2812", "2330", "2892"） -> 保持 4 碼，絕不加前導零！
+      // 3. 一般 4 碼純數字個股/金融股 (例: "2812", "2330") -> 保持 4 碼
       return str;
     };
 
@@ -218,6 +252,10 @@
             </td>
           </tr>`;
 
+        // 初始化投資餘額輸入框預設值
+        const cashInput = document.getElementById("inputCashBalance");
+        if (cashInput) cashInput.value = userCashBalance;
+
         // 1. 撈取 etf_data 與 stock_data
         const etfRes = await supabaseClient.from('etf_data')
           .select('symbol, name, payout_cycle, dividend_4q, price, dividend_latest, pay_date');
@@ -247,7 +285,7 @@
 
         globalDbData = [...formattedEtfs, ...formattedStocks];
 
-        // 2. 撈取歷史與未來預告紀錄 dividend_history (抓取 1000 筆)
+        // 2. 撈取歷史紀錄 dividend_history
         const { data: historyData, error: historyError } = await supabaseClient
           .from('dividend_history')
           .select('symbol, dividend, pay_date, ex_date')
@@ -290,9 +328,8 @@
       });
     }
 
-
     // ==========================================
-    // 4. 表格與數據計算 Engine (雙軌：歷史表優先 + 主表備援)
+    // 4. 表格與數據計算 Engine
     // ==========================================
     function renderMatrix() {
       const tbody = document.getElementById("matrixTableBody");
@@ -338,7 +375,7 @@
           });
         }
 
-        // 3. ✨【本月配息金額對接：歷史流水表優先 + 主表 pay_date 備援】
+        // 3. 本月配息金額對接 (歷史流水表優先 + 主表 pay_date 備援)
         let itemCurrentPayout = 0;
         let matchedInHistory = false;
 
@@ -420,10 +457,17 @@
         <td class="bg-slate-950"></td>
       `;
 
-      const totalYield = totalMarketValue > 0 ? ((grandTotal / totalMarketValue) * 100).toFixed(2) : "0.00";
+      // ✨【關鍵計算】：資產總值 = 股票總市值 + 帳戶投資餘額
+      const roundedMarketValue = Math.round(totalMarketValue);
+      const totalAssets = roundedMarketValue + userCashBalance;
+      const totalYield = roundedMarketValue > 0 ? ((grandTotal / roundedMarketValue) * 100).toFixed(2) : "0.00";
+
+      // 更新頂部四張卡片數據
+      document.getElementById("totalAssetsText").innerText = `$${fmt(totalAssets)}`;
+      document.getElementById("cashBalanceSubText").innerText = `帳戶投資餘額: $${fmt(userCashBalance)}`;
 
       document.getElementById("actualCurrentMonthText").innerText = `$${fmt(actualCurrentMonthTotal)}`;
-      document.getElementById("totalMarketValueText").innerText = `$${fmt(Math.round(totalMarketValue))}`;
+      document.getElementById("totalMarketValueText").innerText = `$${fmt(roundedMarketValue)}`;
       document.getElementById("totalYieldText").innerText = `股息殖利率 ${totalYield}%`;
       document.getElementById("grandTotalText").innerText = `$${fmt(grandTotal)}`;
       document.getElementById("avgMonthlyText").innerText = `平均每月: $${fmt(Math.round(grandTotal / 12))}`;
@@ -432,8 +476,20 @@
     }
 
     // ==========================================
-    // 5. 持股互動操作邏輯
+    // 5. 持股與資產互動操作邏輯
     // ==========================================
+    function updateCashBalance() {
+      const input = document.getElementById("inputCashBalance");
+      const val = parseFloat(input.value);
+      if (isNaN(val) || val < 0) {
+        alert("請輸入正確的帳戶投資餘額金額！");
+        return;
+      }
+      userCashBalance = val;
+      localStorage.setItem("user_cash_balance", userCashBalance);
+      renderMatrix();
+    }
+
     function addOrUpdateStock() {
       const symbolInput = document.getElementById("inputSymbol");
       const sharesInput = document.getElementById("inputShares");
